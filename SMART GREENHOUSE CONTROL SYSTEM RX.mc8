@@ -1,0 +1,86 @@
+***** DeedsMcE Project File *****
+* If you read this message, you need to install the last version of Deeds! *
+FVR 3
+SYS 1
+CPU 1
+FCK 2
+ROM 1
+RAM 1
+PIA 0
+PIB 1
+PIC 2
+PID 3
+PIE 4
+PIF 5
+PIG 6
+PIH 7
+POA 0
+POB 1
+POC 2
+POD 3
+POE 4
+POF 5
+POG 6
+POH 7
+INT 007 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+INT 006 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+INT 005 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+INT 004 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+INT 003 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+INT 002 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+INT 001 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+INT 000 SRC 002 PRT 000 TMD 001 TIN 019 EIN 003 
+******* Project File END ********
+; Final Project: Smart Greenhouse - Receiver (RX)
+OUTP	EQU	00h	; OA output port (Instant Humidity Display) 
+BUSYP	EQU	01h	; OB output port (BUSY line) 
+DATAP	EQU	01h	; IB input port (Incoming Humidity Data)
+STATP	EQU	00h	; IA input port (Strobe line control) 
+LEDP      EQU  02h             ; OC output port (LED/Pump Control) 
+
+	ORG	0000h	; Reset point 
+	JP	START
+	ORG	0100h	
+
+START:	LD	SP,0FFFFh	; Initialize Stack Pointer 
+	LD	A,00h          ; Reset LEDs and outputs at startup 
+       	OUT  (LEDP),A
+	
+MAIN:	LD	A,00h	 ; Set Busy = '0' (Ready to receive) 
+	OUT	(BUSYP),A	
+	
+WAIT0:	IN	A,(STATP)	; Read Strobe line 
+	BIT	0,A            ; Wait for Strobe = '0' 
+	JP	NZ,WAIT0	
+WAIT1:	IN	A,(STATP)	
+	BIT	0,A	 ; Wait for Strobe = '1' (Edge transition) 
+	JP	Z, WAIT1	
+	
+	LD	A,01h	 ; Set Busy = '1' (Data being processed) 
+	OUT	(BUSYP),A	
+	IN	A,(DATAP)	 ; Read Humidity data from IB 
+        LD   D,A            	; Store received data in D register 
+	OUT	(OUTP),A	 ; Show humidity value on 7-segment display 
+
+        ; --- SMART CONTROL LOGIC ---
+        ; Threshold: 30h (Decimal 48). 
+        ; If humidity < 30h (Carry=1), start irrigation. 
+        LD      A,D
+        CP      30h             ; Compare A with 30h 
+        JP      C, PUMP_ON      ; If A < 30h, jump to PUMP_ON 
+        
+        ; --- HUMIDITY SUFFICIENT (30h and above) ---
+        LD      A,02h           ; Turn on Green LED (Bit 1)
+        OUT     (LEDP),A        ; Send to OC port
+	JP	MAIN	
+
+PUMP_ON: ; --- HUMIDITY INSUFFICIENT ---
+        LD      A,01h           ; Turn on Red LED (Bit 0) 
+        OUT     (LEDP),A
+        CALL	PROCESS	 ; Irrigation duration simulation 
+	JP	MAIN	
+
+PROCESS: LD	C,255	 ; Processing delay 
+PRO:	 DEC	C
+	 JP	NZ,PRO
+       RET                  ; Return to Main 	
